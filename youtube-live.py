@@ -16,9 +16,13 @@ logging.basicConfig(level=logging.INFO, encoding='utf-8')
 # Directory where .m3u files are stored
 M3U_DIR = os.environ.get('M3U_DIR', '/data')
 
+# Host IP/hostname used in .m3u files
+HOST_IP = os.environ.get('HOST_IP', '192.168.1.123')
+SERVER_PORT = os.environ.get('SERVER_PORT', '6095')
+
 @app.route('/m3u/<path:filename>', methods=['GET'])
 def serve_m3u(filename):
-    """Serve .m3u files from the configured directory."""
+    """Serve .m3u files from the configured directory, replacing {{HOST_IP}} and {{PORT}} placeholders."""
     if not filename.endswith('.m3u'):
         return jsonify({'error': 'Only .m3u files can be served'}), 400
     filepath = os.path.join(M3U_DIR, filename)
@@ -26,6 +30,8 @@ def serve_m3u(filename):
         return jsonify({'error': 'File not found'}), 404
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
+    content = content.replace('{{HOST_IP}}', HOST_IP)
+    content = content.replace('{{PORT}}', SERVER_PORT)
     return Response(content, content_type='audio/x-mpegurl')
 
 @app.route('/stream', methods=['GET'])
@@ -128,4 +134,4 @@ def stream():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=6095)
+    app.run(host='0.0.0.0', port=int(SERVER_PORT))

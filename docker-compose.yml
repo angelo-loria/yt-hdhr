@@ -8,4 +8,6 @@ services:
       - ./data:/data
     environment:
       - M3U_DIR=/data
+      - HOST_IP=192.168.1.123
+      - SERVER_PORT=6095
     restart: unless-stopped
