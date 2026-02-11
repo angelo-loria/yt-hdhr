@@ -1,6 +1,7 @@
 import subprocess
 import json
 import logging
+import xml.etree.ElementTree as ET
 from flask import Flask, request, Response, jsonify
 from urllib.parse import unquote
 import os
@@ -32,6 +33,43 @@ def serve_m3u(filename):
         content = f.read()
     content = content.replace('{{HOST_IP}}', HOST_IP)
     content = content.replace('{{PORT}}', SERVER_PORT)
+    return Response(content, content_type='audio/x-mpegurl')
+
+@app.route('/generate', methods=['GET'])
+def generate_m3u_from_xml():
+    """Generate an m3u playlist dynamically from a youtubelinks.xml file in the data directory."""
+    xml_filename = request.args.get('xml', 'youtubelinks.xml')
+    xml_path = os.path.join(M3U_DIR, xml_filename)
+    if not os.path.isfile(xml_path):
+        return jsonify({'error': f'XML file not found: {xml_filename}'}), 404
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+    except ET.ParseError as e:
+        return jsonify({'error': f'Failed to parse XML: {str(e)}'}), 400
+
+    base_url = f'http://{HOST_IP}:{SERVER_PORT}'
+    lines = ['#EXTM3U']
+    for channel in root.findall('channel'):
+        name = (channel.find('channel-name').text or '').strip() if channel.find('channel-name') is not None else 'Unknown'
+        tvg_id = (channel.find('tvg-id').text or '').strip() if channel.find('tvg-id') is not None else ''
+        tvg_name = (channel.find('tvg-name').text or '').strip() if channel.find('tvg-name') is not None else name
+        tvg_logo = (channel.find('tvg-logo').text or '').strip() if channel.find('tvg-logo') is not None else ''
+        group_title = (channel.find('group-title').text or '').strip() if channel.find('group-title') is not None else 'General'
+        youtube_url = (channel.find('youtube-url').text or '').strip() if channel.find('youtube-url') is not None else ''
+
+        if not youtube_url:
+            logging.warning(f"Skipping channel '{name}' due to missing YouTube URL.")
+            continue
+
+        lines.append(
+            f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{tvg_name}" '
+            f'tvg-logo="{tvg_logo}" group-title="{group_title}",{name}'
+        )
+        lines.append(f'{base_url}/stream?url={youtube_url}')
+
+    content = '\n'.join(lines) + '\n'
     return Response(content, content_type='audio/x-mpegurl')
 
 @app.route('/stream', methods=['GET'])
