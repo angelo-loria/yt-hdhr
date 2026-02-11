@@ -5,7 +5,7 @@ services:
     ports:
       - "6095:6095"
     volumes:
-      - ./data:/data
+      - /docker/appdata/youtube-live/data:/data
     environment:
       - M3U_DIR=/data
       - HOST_IP=192.168.50.57
