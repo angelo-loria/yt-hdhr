@@ -25,32 +25,38 @@ The easiest way to run `youtube-live.py` is with Docker.
 
 ### Quick Start
 
-1. Place your `.m3u` files in the `data/` directory (a sample `youtubelive.m3u` is included).
+1. Place your `youtubelinks.xml` file in the `data/` directory to define your channels. At container startup, the server will automatically generate `youtubelive.m3u` from it.
 
-2. Start the container:
+2. Configure your environment variables in `docker-compose.yml`:
+
+   - `HOST_IP` — the IP address of the machine running the container
+   - `SERVER_PORT` — the port the server listens on (default `6095`)
+   - `M3U_DIR` — the directory for data files inside the container (default `/data`)
+
+3. Start the container:
 
 ```bash
 docker compose up -d
 ```
 
-3. The server will be available at `http://<your-ip>:6095`
+4. The server will be available at `http://<HOST_IP>:6095`
 
-4. Access your m3u playlist at:
+5. Access your m3u playlist at:
 
 ```
-http://<your-ip>:6095/m3u/youtubelive.m3u
+http://<HOST_IP>:6095/m3u/youtubelive.m3u
 ```
 
 ### Build and Run Manually
 
 ```bash
 docker build -t youtube-live .
-docker run -p 6095:6095 -v ./data:/data youtube-live
+docker run -p 6095:6095 -v ./data:/data -e HOST_IP=192.168.1.123 -e SERVER_PORT=6095 youtube-live
 ```
 
 ### Docker Compose Configuration
 
-The `docker-compose.yml` mounts the local `./data` directory into the container at `/data`. Any `.m3u` files placed in `data/` will be served by the `/m3u/<filename>` endpoint.
+The `docker-compose.yml` mounts the local `./data` directory into the container at `/data`. Environment variables control the host IP, port, and data directory. At startup, if `youtubelinks.xml` is present in the data directory, the server automatically generates `youtubelive.m3u` from it.
 
 ```yaml
 services:
@@ -63,15 +69,51 @@ services:
       - ./data:/data
     environment:
       - M3U_DIR=/data
+      - HOST_IP=192.168.1.123
+      - SERVER_PORT=6095
     restart: unless-stopped
+```
+
+### Environment Variables
+
+| Variable      | Description                                    | Default         |
+| ------------- | ---------------------------------------------- | --------------- |
+| `HOST_IP`     | IP address used in generated m3u stream URLs   | `192.168.1.123` |
+| `SERVER_PORT` | Port the Flask server listens on               | `6095`          |
+| `M3U_DIR`     | Directory for m3u/xml files inside container   | `/data`         |
+
+### Channel Configuration via XML
+
+Instead of manually editing `.m3u` files, you can define your channels in `youtubelinks.xml` and place it in the `data/` directory. The server will automatically generate `youtubelive.m3u` at startup.
+
+```xml
+<channels>
+    <channel>
+        <channel-name>ABC News</channel-name>
+        <tvg-id>ABCNEWS.us</tvg-id>
+        <tvg-name>ABC News</tvg-name>
+        <tvg-logo>https://example.com/logo.png</tvg-logo>
+        <group-title>News</group-title>
+        <youtube-url>https://www.youtube.com/@abcnews/live</youtube-url>
+    </channel>
+</channels>
+```
+
+You can also regenerate the m3u on-demand (e.g., after editing the XML) by visiting:
+
+```
+http://<HOST_IP>:6095/generate
 ```
 
 ### Endpoints
 
-| Endpoint                    | Description                                         |
-| --------------------------- | --------------------------------------------------- |
-| `/stream?url=<youtube-url>` | Proxies a YouTube live stream via Streamlink        |
-| `/m3u/<filename>`           | Serves `.m3u` files from the mounted data directory |
+| Endpoint                     | Description                                                        |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `/stream?url=<youtube-url>`  | Proxies a YouTube live stream via Streamlink                       |
+| `/m3u/<filename>`            | Serves `.m3u` files from the data directory                        |
+| `/xml/<filename>`            | Serves `.xml` files from the data directory                        |
+| `/generate`                  | Generates `youtubelive.m3u` from `youtubelinks.xml` and serves it  |
+| `/generate?xml=<filename>`   | Generates an m3u from a custom XML file                            |
 
 ## Requirements (Non-Docker)
 
