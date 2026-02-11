@@ -93,6 +93,7 @@ Instead of manually editing `.m3u` files, you can define your channels in `youtu
         <tvg-name>ABC News</tvg-name>
         <tvg-logo>https://example.com/logo.png</tvg-logo>
         <group-title>News</group-title>
+        <channel-number>1</channel-number>
         <youtube-url>https://www.youtube.com/@abcnews/live</youtube-url>
     </channel>
 </channels>
