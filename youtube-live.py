@@ -13,6 +13,21 @@ app = Flask(__name__)
 # Set up logging with UTF-8 encoding
 logging.basicConfig(level=logging.INFO, encoding='utf-8')
 
+# Directory where .m3u files are stored
+M3U_DIR = os.environ.get('M3U_DIR', '/data')
+
+@app.route('/m3u/<path:filename>', methods=['GET'])
+def serve_m3u(filename):
+    """Serve .m3u files from the configured directory."""
+    if not filename.endswith('.m3u'):
+        return jsonify({'error': 'Only .m3u files can be served'}), 400
+    filepath = os.path.join(M3U_DIR, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({'error': 'File not found'}), 404
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return Response(content, content_type='audio/x-mpegurl')
+
 @app.route('/stream', methods=['GET'])
 def stream():
     url = unquote(request.args.get('url'))  # Decode URL-encoded characters
@@ -36,12 +51,12 @@ def stream():
         # Check if streams are available
         if 'streams' not in stream_info or not stream_info['streams']:
             if 'youtube.com' in url.lower() or 'youtu.be' in url.lower():
-                yt_command = ['youtube-dl', '--get-url', '--youtube-skip-dash-manifest', url]
+                yt_command = ['yt-dlp', '--get-url', '--youtube-skip-dash-manifest', url]
                 yt_process = subprocess.Popen(yt_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 yt_url, yt_error = yt_process.communicate()
                 
                 if yt_process.returncode != 0:
-                    logging.error(f'youtube-dl error: {yt_error.decode('utf-8', errors='replace')}')
+                    logging.error(f'yt-dlp error: {yt_error.decode("utf-8", errors="replace")}')
                     return jsonify({'error': 'No valid streams found'}), 404
                 
                 url = yt_url.decode('utf-8', errors='replace').strip()

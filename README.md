@@ -1,36 +1,107 @@
 # youtube-to-m3u
+
 Play YouTube live streams in any player
 
 ## Important Note
+
 The m3u/extracted m3u8 links will only work on machines that have the same public IP address (on the same local network) as the machine that extracted them. To play on a client that has a different public IP (on a different network) use a non flask version and load the m3u into a m3u proxy such as threadfin to restream
 
 ## Choose script option
+
 youtube-live.py - Uses a flask server to automatically pull the actuall stream link. Server needs to be running all the time for m3u to work. Best for always working stream<br>
 <br>
 youtube-non-server.py - Pulls stream link into m3u but script will have to manually run (or cron job) every few hours as the stream links will expire <br>
 <br>
 youtube_non_stream_link.py - Same as youtube-non-server.py but doesn't require streamlink - only use if you are unable to install streamlink as if anything changes youtube side the script will need updating instead of just updating streamlink
 
-## Requirements
+## Docker (Recommended for youtube-live.py)
+
+The easiest way to run `youtube-live.py` is with Docker.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/) (included with Docker Desktop)
+
+### Quick Start
+
+1. Place your `.m3u` files in the `data/` directory (a sample `youtubelive.m3u` is included).
+
+2. Start the container:
+
+```bash
+docker compose up -d
+```
+
+3. The server will be available at `http://<your-ip>:6095`
+
+4. Access your m3u playlist at:
+
+```
+http://<your-ip>:6095/m3u/youtubelive.m3u
+```
+
+### Build and Run Manually
+
+```bash
+docker build -t youtube-live .
+docker run -p 6095:6095 -v ./data:/data youtube-live
+```
+
+### Docker Compose Configuration
+
+The `docker-compose.yml` mounts the local `./data` directory into the container at `/data`. Any `.m3u` files placed in `data/` will be served by the `/m3u/<filename>` endpoint.
+
+```yaml
+services:
+  youtube-live:
+    build: .
+    container_name: youtube-live
+    ports:
+      - "6095:6095"
+    volumes:
+      - ./data:/data
+    environment:
+      - M3U_DIR=/data
+    restart: unless-stopped
+```
+
+### Endpoints
+
+| Endpoint                    | Description                                         |
+| --------------------------- | --------------------------------------------------- |
+| `/stream?url=<youtube-url>` | Proxies a YouTube live stream via Streamlink        |
+| `/m3u/<filename>`           | Serves `.m3u` files from the mounted data directory |
+
+## Requirements (Non-Docker)
+
 ### All Versions
+
 python - must be 3.10 or higher (3.8 or lower is not supported by streamlink) <br>
-requests (can be installed by typing ```pip install requests``` at cmd/terminal window) <br>
+requests (can be installed by typing `pip install requests` at cmd/terminal window) <br>
 
 ### All Versions except youtube_non_stream_link.py
+
 install [streamlink](https://streamlink.github.io/install.html) and make it available at path
 
 ### youtube-live.py only <br>
-flask (can be installed by typing ```pip install flask``` at cmd/terminal window) <br>
+
+flask (can be installed by typing `pip install flask` at cmd/terminal window) <br>
+yt-dlp (can be installed by typing `pip install yt-dlp` at cmd/terminal window) <br>
 youtubelive.m3u
 
 ### youtube-non-server.py and youtube_non_stream_link.py<br>
+
 youtubelinks.xml
 
 ## Verify streamlink install
+
 To test streamlink install type in a new cmd/terminal window
+
 ```
 streamlink --version
 ```
+
 The output should be
 streamlink "version number" eg 8.1.2 <br>
 If it says unknown command/'streamlink' is not recognized as an internal or external command,
@@ -38,11 +109,12 @@ operable program or batch file. <br>
 Then you need to make sure you have installed streamlink to path/environmental variables
 
 ## How To Use youtube-live.py
+
 Open youtubelive.m3u <br>
 Change the ip address in the streamlink to the ip address of the machine running the script <br>
 You can also change the port but if you do this you must change the port to match at the bottom of youtube-live.py <br>
 <br>
-To add other live streams just add into m3u in the following format 
+To add other live streams just add into m3u in the following format
 
 ```
 #EXTINF:-1 tvg-name="Channel Name" tvg-id="24.7.Dummy.us" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/YouTube_dark_logo_2017.svg/2560px-YouTube_dark_logo_2017.svg.png" group-title="YouTube",Channel Name
@@ -60,6 +132,7 @@ python youtube-live.py or python3 youtube-live.py if you have the old python2 in
 Script must be running for the m3u to work
 
 ## How To Use youtube-non-server.py or youtube_non_stream_link.py
+
 Open youtubelinks.xml in a code text editor eg notepad++ <br>
 Add in your channel details for your youtube stream in the following format
 

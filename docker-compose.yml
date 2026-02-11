@@ -1,0 +1,11 @@
+services:
+  youtube-live:
+    build: .
+    container_name: youtube-live
+    ports:
+      - "6095:6095"
+    volumes:
+      - ./data:/data
+    environment:
+      - M3U_DIR=/data
+    restart: unless-stopped
