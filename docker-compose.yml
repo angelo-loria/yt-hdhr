@@ -6,9 +6,5 @@ services:
     volumes:
       - /docker/appdata/yt-hdhr/data:/data
     environment:
-      - M3U_DIR=/data
       - HOST_IP=192.168.50.57
-      - SERVER_PORT=6095
-      - HDHR_FRIENDLY_NAME=yt-hdhr
-      - HDHR_TUNER_COUNT=2
     restart: unless-stopped

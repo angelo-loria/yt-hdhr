@@ -4,12 +4,11 @@ Note: shoutout to @purplescorpion1 who wrote the [original project I forked for 
 
 ## How It Works
 
-This is a containerized Flask server that proxies yt live streams and emulates an HDHR tuner. It also outputs a separate M3U playlist and EPG file.
-The server uses [Streamlink](https://streamlink.github.io/) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) to resolve yt live stream URLs on the fly. Define your channels in an XML file, and the container automatically generates an HDHR device, M3U playlist and XMLTV EPG at startup.
+This is a containerized Flask server that proxies yt live streams and emulates an HDHR tuner, along with outputting a separate M3U playlist and EPG file. It uses [Streamlink](https://streamlink.github.io/) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) to resolve yt live stream URLs. Streams are defined in an XML file.
 
 ### HDHR Emulation
 
-The server exposes the same HTTP endpoints as a real [HDHR](https://www.silicondust.com/) network tuner (`/discover.json`, `/lineup.json`, `/lineup_status.json`, `/device.xml`). It also runs an SSDP service so that clients can automatically discover the virtual tuner on your local network.
+The server exposes the same HTTP endpoints as a real HDHR network tuner (`/discover.json`, `/lineup.json`, `/lineup_status.json`, `/device.xml`) and runs an SSDP service so that clients can discover the virtual tuner on your local network.
 
 ## Prerequisites
 
@@ -25,12 +24,14 @@ The server exposes the same HTTP endpoints as a real [HDHR](https://www.silicond
      - ./data:/data
    ```
 
-   Place your `ytlinks.xml` file in the `data/` directory to define your channels. See **Channel Configuration via XML**.
+   Place your `ytlinks.xml` file in the `data/` directory to define your channels. See [Channel Configuration via XML](#channel-configuration-via-xml).
 
-2. Configure your environment variables in `docker-compose.yml`:
-   - `HOST_IP` — the IP address of the machine running the container
-   - `SERVER_PORT` — the port the server listens on (default `6095`)
-   - `M3U_DIR` — the directory for data files inside the container (default `/data`)
+2. Set the `HOST_IP` environment variable in `docker-compose.yml` to the IP address of the machine running the container. You shouldn't have to alter any other default variables but see [Environment Variables](#environment-variables) for more options.
+
+   ```yaml
+   environment:
+     - HOST_IP=192.168.1.123
+   ```
 
 3. Start the container:
 
