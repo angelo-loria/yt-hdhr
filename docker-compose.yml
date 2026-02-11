@@ -1,14 +1,14 @@
 services:
-  youtube-live:
+  yt-hdhr:
     build: .
-    container_name: youtube-live
+    container_name: yt-hdhr
     network_mode: host
     volumes:
-      - /docker/appdata/youtube-live/data:/data
+      - /docker/appdata/yt-hdhr/data:/data
     environment:
       - M3U_DIR=/data
       - HOST_IP=192.168.50.57
       - SERVER_PORT=6095
-      - HDHR_FRIENDLY_NAME=youtube-to-m3u
+      - HDHR_FRIENDLY_NAME=yt-hdhr
       - HDHR_TUNER_COUNT=2
     restart: unless-stopped

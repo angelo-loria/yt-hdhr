@@ -30,7 +30,7 @@ SERVER_PORT = os.environ.get('SERVER_PORT', '6095')
 
 # HDHomeRun emulation settings
 HDHR_DEVICE_ID = os.environ.get('HDHR_DEVICE_ID', None)
-HDHR_FRIENDLY_NAME = os.environ.get('HDHR_FRIENDLY_NAME', 'youtube-to-m3u')
+HDHR_FRIENDLY_NAME = os.environ.get('HDHR_FRIENDLY_NAME', 'yt-hdhr')
 HDHR_TUNER_COUNT = int(os.environ.get('HDHR_TUNER_COUNT', '2'))
 HDHR_MANUFACTURER = os.environ.get('HDHR_MANUFACTURER', 'Silicondust')
 HDHR_MODEL = os.environ.get('HDHR_MODEL', 'HDTC-2US')
