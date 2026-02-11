@@ -58,7 +58,7 @@ def ssdp_response(addr, host_ip, port):
         f'CACHE-CONTROL: max-age=1800\r\n'
         f'EXT:\r\n'
         f'LOCATION: http://{host_ip}:{port}/device.xml\r\n'
-        f'SERVER: youtube-to-m3u/1.0 UPnP/1.0 HDHomeRun/1.0\r\n'
+        f'SERVER: yt-hdhr/1.0 UPnP/1.0 HDHomeRun/1.0\r\n'
         f'ST: {SSDP_DEVICE_TYPE}\r\n'
         f'USN: uuid:{DEVICE_ID}::{SSDP_DEVICE_TYPE}\r\n'
         f'\r\n'
@@ -98,7 +98,7 @@ def ssdp_broadcaster(host_ip, port):
         f'HOST: {SSDP_MULTICAST}:{SSDP_PORT}\r\n'
         f'CACHE-CONTROL: max-age=1800\r\n'
         f'LOCATION: http://{host_ip}:{port}/device.xml\r\n'
-        f'SERVER: youtube-to-m3u/1.0 UPnP/1.0 HDHomeRun/1.0\r\n'
+        f'SERVER: yt-hdhr/1.0 UPnP/1.0 HDHomeRun/1.0\r\n'
         f'NT: {SSDP_DEVICE_TYPE}\r\n'
         f'NTS: ssdp:alive\r\n'
         f'USN: uuid:{DEVICE_ID}::{SSDP_DEVICE_TYPE}\r\n'
@@ -122,7 +122,7 @@ def start_ssdp(host_ip, port):
     logging.info(f'SSDP services started — device {DEVICE_ID} on {host_ip}:{port}')
 
 def generate_m3u_from_xml_file(xml_path, output_path):
-    """Parse a youtubelinks.xml file and write a youtubelive.m3u playlist."""
+    """Parse a ytlinks.xml file and write a ytlive.m3u playlist."""
     if not os.path.isfile(xml_path):
         logging.warning(f"XML file not found at {xml_path}, skipping m3u generation.")
         return False
@@ -143,9 +143,9 @@ def generate_m3u_from_xml_file(xml_path, output_path):
         tvg_logo = (channel.find('tvg-logo').text or '').strip() if channel.find('tvg-logo') is not None else ''
         group_title = (channel.find('group-title').text or '').strip() if channel.find('group-title') is not None else 'General'
         channel_number = (channel.find('channel-number').text or '').strip() if channel.find('channel-number') is not None else str(idx)
-        youtube_url = (channel.find('youtube-url').text or '').strip() if channel.find('youtube-url') is not None else ''
+        yt_url = (channel.find('yt-url').text or '').strip() if channel.find('yt-url') is not None else ''
 
-        if not youtube_url:
+        if not yt_url:
             logging.warning(f"Skipping channel '{name}' due to missing YouTube URL.")
             continue
 
@@ -153,7 +153,7 @@ def generate_m3u_from_xml_file(xml_path, output_path):
             f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{tvg_name}"'
             f' tvg-chno="{channel_number}" tvg-logo="{tvg_logo}" group-title="{group_title}",{name}'
         )
-        lines.append(f'{base_url}/stream?url={youtube_url}')
+        lines.append(f'{base_url}/stream?url={yt_url}')
 
     content = '\n'.join(lines) + '\n'
     with open(output_path, 'w', encoding='utf-8') as f:
@@ -162,7 +162,7 @@ def generate_m3u_from_xml_file(xml_path, output_path):
     return True
 
 def generate_epg_from_xml_file(xml_path, output_path):
-    """Parse a youtubelinks.xml file and generate an XMLTV EPG file."""
+    """Parse a ytlinks.xml file and generate an XMLTV EPG file."""
     if not os.path.isfile(xml_path):
         logging.warning(f"XML file not found at {xml_path}, skipping EPG generation.")
         return False
@@ -175,7 +175,7 @@ def generate_epg_from_xml_file(xml_path, output_path):
         return False
 
     tv = ET.Element('tv')
-    tv.set('generator-info-name', 'youtube-to-m3u')
+    tv.set('generator-info-name', 'yt-hdhr')
     tv.set('generator-info-url', f'http://{HOST_IP}:{SERVER_PORT}')
 
     now = datetime.utcnow()
@@ -187,9 +187,9 @@ def generate_epg_from_xml_file(xml_path, output_path):
         name = (channel.find('channel-name').text or '').strip() if channel.find('channel-name') is not None else tvg_name
         tvg_logo = (channel.find('tvg-logo').text or '').strip() if channel.find('tvg-logo') is not None else ''
         channel_number = (channel.find('channel-number').text or '').strip() if channel.find('channel-number') is not None else str(idx)
-        youtube_url = (channel.find('youtube-url').text or '').strip() if channel.find('youtube-url') is not None else ''
+        yt_url = (channel.find('yt-url').text or '').strip() if channel.find('yt-url') is not None else ''
 
-        if not tvg_id or not youtube_url:
+        if not tvg_id or not yt_url:
             continue
 
         # Channel element
@@ -270,8 +270,8 @@ def serve_xml(filename):
 
 @app.route('/generate', methods=['GET'])
 def generate_m3u_from_xml():
-    """Generate an m3u playlist dynamically from a youtubelinks.xml file in the data directory."""
-    xml_filename = request.args.get('xml', 'youtubelinks.xml')
+    """Generate an m3u playlist dynamically from a ytlinks.xml file in the data directory."""
+    xml_filename = request.args.get('xml', 'ytlinks.xml')
     xml_path = os.path.join(M3U_DIR, xml_filename)
     if not os.path.isfile(xml_path):
         return jsonify({'error': f'XML file not found: {xml_filename}'}), 404
@@ -288,8 +288,8 @@ def generate_m3u_from_xml():
 
 @app.route('/epg', methods=['GET'])
 def generate_epg():
-    """Generate an XMLTV EPG from a youtubelinks.xml file in the data directory."""
-    xml_filename = request.args.get('xml', 'youtubelinks.xml')
+    """Generate an XMLTV EPG from a ytlinks.xml file in the data directory."""
+    xml_filename = request.args.get('xml', 'ytlinks.xml')
     xml_path = os.path.join(M3U_DIR, xml_filename)
     if not os.path.isfile(xml_path):
         return jsonify({'error': f'XML file not found: {xml_filename}'}), 404
@@ -317,8 +317,8 @@ def serve_epg(filename):
     return Response(content, content_type='application/xml')
 
 def get_channels_from_xml():
-    """Read channel list from youtubelinks.xml. Returns a list of dicts."""
-    xml_path = os.path.join(M3U_DIR, 'youtubelinks.xml')
+    """Read channel list from ytlinks.xml. Returns a list of dicts."""
+    xml_path = os.path.join(M3U_DIR, 'ytlinks.xml')
     if not os.path.isfile(xml_path):
         return []
     try:
@@ -335,8 +335,8 @@ def get_channels_from_xml():
         tvg_logo = (ch.find('tvg-logo').text or '').strip() if ch.find('tvg-logo') is not None else ''
         group_title = (ch.find('group-title').text or '').strip() if ch.find('group-title') is not None else 'General'
         channel_number = (ch.find('channel-number').text or '').strip() if ch.find('channel-number') is not None else str(idx)
-        youtube_url = (ch.find('youtube-url').text or '').strip() if ch.find('youtube-url') is not None else ''
-        if youtube_url:
+        yt_url = (ch.find('yt-url').text or '').strip() if ch.find('yt-url') is not None else ''
+        if yt_url:
             channels.append({
                 'name': name,
                 'tvg_id': tvg_id,
@@ -344,7 +344,7 @@ def get_channels_from_xml():
                 'tvg_logo': tvg_logo,
                 'group_title': group_title,
                 'channel_number': channel_number,
-                'youtube_url': youtube_url,
+                'yt_url': yt_url,
             })
     return channels
 
@@ -380,7 +380,7 @@ def hdhr_lineup():
         entry = {
             'GuideNumber': ch['channel_number'],
             'GuideName': ch['name'],
-            'URL': f'{base_url}/stream?url={ch["youtube_url"]}',
+            'URL': f'{base_url}/stream?url={ch["yt_url"]}',
         }
         if ch.get('tvg_logo'):
             entry['Station'] = ch['channel_number']
@@ -530,10 +530,10 @@ def stream():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Generate youtubelive.m3u and EPG from youtubelinks.xml at startup if the XML exists
-    xml_path = os.path.join(M3U_DIR, 'youtubelinks.xml')
-    m3u_path = os.path.join(M3U_DIR, 'youtubelive.m3u')
-    epg_path = os.path.join(M3U_DIR, 'youtubelinks_epg.xml')
+    # Generate ytlive.m3u and EPG from ytlinks.xml at startup if the XML exists
+    xml_path = os.path.join(M3U_DIR, 'ytlinks.xml')
+    m3u_path = os.path.join(M3U_DIR, 'ytlive.m3u')
+    epg_path = os.path.join(M3U_DIR, 'ytlinks_epg.xml')
     generate_m3u_from_xml_file(xml_path, m3u_path)
     generate_epg_from_xml_file(xml_path, epg_path)
 

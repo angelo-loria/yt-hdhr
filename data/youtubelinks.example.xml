@@ -5,6 +5,6 @@
         <tvg-name>Duluth Canal Cam</tvg-name>
         <tvg-logo>https://images.clubexpress.com/605134/graphics/Duluth_Harbor_Cam_1440771302.png</tvg-logo>
         <group-title>Live</group-title>
-        <youtube-url>https://www.youtube.com/watch?v=HPS48TMmNag</youtube-url>
+        <yt-url>https://www.youtube.com/watch?v=HPS48TMmNag</yt-url>
     </channel>
 </channels>

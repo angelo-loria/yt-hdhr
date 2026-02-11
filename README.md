@@ -25,7 +25,7 @@ The server exposes the same HTTP endpoints as a real [HDHR](https://www.silicond
      - ./data:/data
    ```
 
-   Place your `youtubelinks.xml` file in the `data/` directory to define your channels. See **Channel Configuration via XML**.
+   Place your `ytlinks.xml` file in the `data/` directory to define your channels. See **Channel Configuration via XML**.
 
 2. Configure your environment variables in `docker-compose.yml`:
    - `HOST_IP` — the IP address of the machine running the container
@@ -43,25 +43,25 @@ The server exposes the same HTTP endpoints as a real [HDHR](https://www.silicond
 5. Access your m3u playlist at:
 
    ```
-   http://<HOST_IP>:6095/m3u/youtubelive.m3u
+   http://<HOST_IP>:6095/m3u/ytlive.m3u
    ```
 
 6. Access your EPG at:
 
    ```
-   http://<HOST_IP>:6095/epg/youtubelinks_epg.xml
+   http://<HOST_IP>:6095/epg/ytlinks_epg.xml
    ```
 
 ## Build and Run Manually
 
 ```bash
-docker build -t youtube-live .
-docker run --network host -v ./data:/data -e HOST_IP=192.168.1.123 -e SERVER_PORT=6095 youtube-live
+docker build -t yt-hdhr .
+docker run --network host -v ./data:/data -e HOST_IP=192.168.1.123 -e SERVER_PORT=6095 yt-hdhr
 ```
 
 ## Docker Compose Configuration
 
-The `docker-compose.yml` uses `network_mode: host` for SSDP auto-discovery and mounts the local `./data` directory into the container at `/data`. At startup, if `youtubelinks.xml` is present in the data directory, the server automatically generates `youtubelive.m3u` and `youtubelinks_epg.xml` from it.
+The `docker-compose.yml` uses `network_mode: host` for SSDP auto-discovery and mounts the local `./data` directory into the container at `/data`. At startup, if `ytlinks.xml` is present in the data directory, the server automatically generates `ytlive.m3u` and `ytlinks_epg.xml` from it.
 
 ## Environment Variables
 
@@ -78,7 +78,7 @@ The `docker-compose.yml` uses `network_mode: host` for SSDP auto-discovery and m
 
 ## Channel Configuration via XML
 
-Define your channels in `youtubelinks.xml` and place it in the `data/` directory. The server will automatically generate `youtubelive.m3u` and an XMLTV EPG file (`youtubelinks_epg.xml`) at startup. Channel numbers are automatically assigned based on order, or you can set them explicitly with `<channel-number>`.
+Define your channels in `ytlinks.xml` and place it in the `data/` directory. The server will automatically generate `ytlive.m3u` and an XMLTV EPG file (`ytlinks_epg.xml`) at startup. Channel numbers are automatically assigned based on order, or you can set them explicitly with `<channel-number>`.
 
 ```xml
 <channels>
@@ -88,7 +88,7 @@ Define your channels in `youtubelinks.xml` and place it in the `data/` directory
         <tvg-name>Duluth Canal Cam</tvg-name>
         <tvg-logo>https://images.clubexpress.com/605134/graphics/Duluth_Harbor_Cam_1440771302.png</tvg-logo>
         <group-title>Live</group-title>
-        <youtube-url>https://www.youtube.com/watch?v=HPS48TMmNag</youtube-url>
+        <yt-url>https://www.youtube.com/watch?v=HPS48TMmNag</yt-url>
     </channel>
 </channels>
 ```
@@ -103,7 +103,7 @@ Define your channels in `youtubelinks.xml` and place it in the `data/` directory
 | `tvg-logo`       | Direct URL to the channel logo image                           | No       |
 | `group-title`    | Group the channel appears in (e.g., News, Sports)              | No       |
 | `channel-number` | Channel number (auto-assigned if omitted)                      | No       |
-| `youtube-url`    | yt live stream URL — `@channelname/live` or `/watch?v=` format | Yes      |
+| `yt-url`         | yt live stream URL — `@channelname/live` or `/watch?v=` format | Yes      |
 
 You can also regenerate the m3u and EPG on-demand (e.g., after editing the XML) by visiting:
 
@@ -116,16 +116,16 @@ http://<HOST_IP>:6095/epg
 
 ### Stream & Playlist Endpoints
 
-| Endpoint                    | Description                                                       |
-| --------------------------- | ----------------------------------------------------------------- |
-| `/stream?url=<youtube-url>` | Proxies a yt live stream via Streamlink                           |
-| `/m3u/<filename>`           | Serves `.m3u` files from the data directory                       |
-| `/xml/<filename>`           | Serves `.xml` files from the data directory                       |
-| `/epg/<filename>`           | Serves EPG `.xml` files from the data directory                   |
-| `/generate`                 | Generates `youtubelive.m3u` from `youtubelinks.xml` and serves it |
-| `/generate?xml=<filename>`  | Generates an m3u from a custom XML file                           |
-| `/epg`                      | Generates EPG from `youtubelinks.xml` and serves it               |
-| `/epg?xml=<filename>`       | Generates EPG from a custom XML file                              |
+| Endpoint                   | Description                                             |
+| -------------------------- | ------------------------------------------------------- |
+| `/stream?url=<yt-url>`     | Proxies a yt live stream via Streamlink                 |
+| `/m3u/<filename>`          | Serves `.m3u` files from the data directory             |
+| `/xml/<filename>`          | Serves `.xml` files from the data directory             |
+| `/epg/<filename>`          | Serves EPG `.xml` files from the data directory         |
+| `/generate`                | Generates `ytlive.m3u` from `ytlinks.xml` and serves it |
+| `/generate?xml=<filename>` | Generates an m3u from a custom XML file                 |
+| `/epg`                     | Generates EPG from `ytlinks.xml` and serves it          |
+| `/epg?xml=<filename>`      | Generates EPG from a custom XML file                    |
 
 ### HDHR Emulation Endpoints
 
