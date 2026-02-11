@@ -74,6 +74,18 @@ def serve_m3u(filename):
     content = content.replace('{{PORT}}', SERVER_PORT)
     return Response(content, content_type='audio/x-mpegurl')
 
+@app.route('/xml/<path:filename>', methods=['GET'])
+def serve_xml(filename):
+    """Serve .xml files from the configured directory."""
+    if not filename.endswith('.xml'):
+        return jsonify({'error': 'Only .xml files can be served'}), 400
+    filepath = os.path.join(M3U_DIR, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({'error': 'File not found'}), 404
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return Response(content, content_type='application/xml')
+
 @app.route('/generate', methods=['GET'])
 def generate_m3u_from_xml():
     """Generate an m3u playlist dynamically from a youtubelinks.xml file in the data directory."""
