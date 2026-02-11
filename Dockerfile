@@ -16,9 +16,9 @@ COPY youtube-live.py .
 # Default directory for .m3u files
 RUN mkdir -p /data
 ENV M3U_DIR=/data
-ENV HOST_IP=192.168.1.123
+ENV HOST_IP=127.0.0.1
 ENV SERVER_PORT=6095
 
-EXPOSE 6095
+EXPOSE ${SERVER_PORT}
 
 CMD ["python", "youtube-live.py"]
