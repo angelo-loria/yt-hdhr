@@ -2,6 +2,8 @@ import subprocess
 import json
 import logging
 import xml.etree.ElementTree as ET
+from xml.dom import minidom
+from datetime import datetime, timedelta
 from flask import Flask, request, Response, jsonify
 from urllib.parse import unquote
 import os
@@ -60,6 +62,84 @@ def generate_m3u_from_xml_file(xml_path, output_path):
     logging.info(f"Generated {output_path} from {xml_path} with {len(lines) - 1} entries.")
     return True
 
+def generate_epg_from_xml_file(xml_path, output_path):
+    """Parse a youtubelinks.xml file and generate an XMLTV EPG file."""
+    if not os.path.isfile(xml_path):
+        logging.warning(f"XML file not found at {xml_path}, skipping EPG generation.")
+        return False
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+    except ET.ParseError as e:
+        logging.error(f"Failed to parse XML file {xml_path}: {str(e)}")
+        return False
+
+    tv = ET.Element('tv')
+    tv.set('generator-info-name', 'youtube-to-m3u')
+    tv.set('generator-info-url', f'http://{HOST_IP}:{SERVER_PORT}')
+
+    now = datetime.utcnow()
+    channel_count = 0
+
+    for channel in root.findall('channel'):
+        tvg_id = (channel.find('tvg-id').text or '').strip() if channel.find('tvg-id') is not None else ''
+        tvg_name = (channel.find('tvg-name').text or '').strip() if channel.find('tvg-name') is not None else ''
+        name = (channel.find('channel-name').text or '').strip() if channel.find('channel-name') is not None else tvg_name
+        tvg_logo = (channel.find('tvg-logo').text or '').strip() if channel.find('tvg-logo') is not None else ''
+        youtube_url = (channel.find('youtube-url').text or '').strip() if channel.find('youtube-url') is not None else ''
+
+        if not tvg_id or not youtube_url:
+            continue
+
+        # Channel element
+        ch_elem = ET.SubElement(tv, 'channel')
+        ch_elem.set('id', tvg_id)
+        display_name = ET.SubElement(ch_elem, 'display-name')
+        display_name.text = tvg_name or name
+        if tvg_logo:
+            icon = ET.SubElement(ch_elem, 'icon')
+            icon.set('src', tvg_logo)
+
+        # Programme element — 24-hour live block repeated for 7 days
+        for day_offset in range(7):
+            start_time = (now + timedelta(days=day_offset)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = start_time + timedelta(days=1)
+            start_str = start_time.strftime('%Y%m%d%H%M%S') + ' +0000'
+            end_str = end_time.strftime('%Y%m%d%H%M%S') + ' +0000'
+
+            prog = ET.SubElement(tv, 'programme')
+            prog.set('start', start_str)
+            prog.set('stop', end_str)
+            prog.set('channel', tvg_id)
+            title = ET.SubElement(prog, 'title')
+            title.set('lang', 'en')
+            title.text = f'{tvg_name or name} - Live'
+            desc = ET.SubElement(prog, 'desc')
+            desc.set('lang', 'en')
+            desc.text = f'Live stream from {name}'
+            if tvg_logo:
+                prog_icon = ET.SubElement(prog, 'icon')
+                prog_icon.set('src', tvg_logo)
+
+        channel_count += 1
+
+    # Pretty print the XML
+    xml_str = ET.tostring(tv, encoding='unicode', xml_declaration=False)
+    xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n' + xml_str
+    parsed = minidom.parseString(xml_str)
+    pretty_xml = parsed.toprettyxml(indent='  ', encoding='UTF-8').decode('utf-8')
+    # Remove extra XML declaration added by minidom
+    lines = pretty_xml.split('\n')
+    if lines[0].startswith('<?xml'):
+        lines[0] = '<?xml version="1.0" encoding="UTF-8"?>'
+    pretty_xml = '\n'.join(lines)
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(pretty_xml)
+    logging.info(f"Generated EPG {output_path} from {xml_path} with {channel_count} channels.")
+    return True
+
 @app.route('/m3u/<path:filename>', methods=['GET'])
 def serve_m3u(filename):
     """Serve .m3u files from the configured directory, replacing {{HOST_IP}} and {{PORT}} placeholders."""
@@ -103,6 +183,36 @@ def generate_m3u_from_xml():
     with open(output_path, 'r', encoding='utf-8') as f:
         content = f.read()
     return Response(content, content_type='audio/x-mpegurl')
+
+@app.route('/epg', methods=['GET'])
+def generate_epg():
+    """Generate an XMLTV EPG from a youtubelinks.xml file in the data directory."""
+    xml_filename = request.args.get('xml', 'youtubelinks.xml')
+    xml_path = os.path.join(M3U_DIR, xml_filename)
+    if not os.path.isfile(xml_path):
+        return jsonify({'error': f'XML file not found: {xml_filename}'}), 404
+
+    output_filename = os.path.splitext(xml_filename)[0] + '_epg.xml'
+    output_path = os.path.join(M3U_DIR, output_filename)
+
+    if not generate_epg_from_xml_file(xml_path, output_path):
+        return jsonify({'error': 'Failed to generate EPG'}), 500
+
+    with open(output_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return Response(content, content_type='application/xml')
+
+@app.route('/epg/<path:filename>', methods=['GET'])
+def serve_epg(filename):
+    """Serve EPG .xml files from the configured directory."""
+    if not filename.endswith('.xml'):
+        return jsonify({'error': 'Only .xml files can be served'}), 400
+    filepath = os.path.join(M3U_DIR, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({'error': 'File not found'}), 404
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return Response(content, content_type='application/xml')
 
 @app.route('/stream', methods=['GET'])
 def stream():
@@ -204,9 +314,11 @@ def stream():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Generate youtubelive.m3u from youtubelinks.xml at startup if the XML exists
+    # Generate youtubelive.m3u and EPG from youtubelinks.xml at startup if the XML exists
     xml_path = os.path.join(M3U_DIR, 'youtubelinks.xml')
     m3u_path = os.path.join(M3U_DIR, 'youtubelive.m3u')
+    epg_path = os.path.join(M3U_DIR, 'youtubelinks_epg.xml')
     generate_m3u_from_xml_file(xml_path, m3u_path)
+    generate_epg_from_xml_file(xml_path, epg_path)
 
     app.run(host='0.0.0.0', port=int(SERVER_PORT))
