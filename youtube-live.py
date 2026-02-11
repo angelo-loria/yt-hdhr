@@ -38,23 +38,22 @@ def generate_m3u_from_xml_file(xml_path, output_path):
 
     base_url = f'http://{HOST_IP}:{SERVER_PORT}'
     lines = ['#EXTM3U']
-    for channel in root.findall('channel'):
+    for idx, channel in enumerate(root.findall('channel'), start=1):
         name = (channel.find('channel-name').text or '').strip() if channel.find('channel-name') is not None else 'Unknown'
         tvg_id = (channel.find('tvg-id').text or '').strip() if channel.find('tvg-id') is not None else ''
         tvg_name = (channel.find('tvg-name').text or '').strip() if channel.find('tvg-name') is not None else name
         tvg_logo = (channel.find('tvg-logo').text or '').strip() if channel.find('tvg-logo') is not None else ''
         group_title = (channel.find('group-title').text or '').strip() if channel.find('group-title') is not None else 'General'
-        channel_number = (channel.find('channel-number').text or '').strip() if channel.find('channel-number') is not None else ''
+        channel_number = (channel.find('channel-number').text or '').strip() if channel.find('channel-number') is not None else str(idx)
         youtube_url = (channel.find('youtube-url').text or '').strip() if channel.find('youtube-url') is not None else ''
 
         if not youtube_url:
             logging.warning(f"Skipping channel '{name}' due to missing YouTube URL.")
             continue
 
-        chno_attr = f' tvg-chno="{channel_number}"' if channel_number else ''
         lines.append(
             f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{tvg_name}"'
-            f'{chno_attr} tvg-logo="{tvg_logo}" group-title="{group_title}",{name}'
+            f' tvg-chno="{channel_number}" tvg-logo="{tvg_logo}" group-title="{group_title}",{name}'
         )
         lines.append(f'{base_url}/stream?url={youtube_url}')
 
@@ -84,12 +83,12 @@ def generate_epg_from_xml_file(xml_path, output_path):
     now = datetime.utcnow()
     channel_count = 0
 
-    for channel in root.findall('channel'):
+    for idx, channel in enumerate(root.findall('channel'), start=1):
         tvg_id = (channel.find('tvg-id').text or '').strip() if channel.find('tvg-id') is not None else ''
         tvg_name = (channel.find('tvg-name').text or '').strip() if channel.find('tvg-name') is not None else ''
         name = (channel.find('channel-name').text or '').strip() if channel.find('channel-name') is not None else tvg_name
         tvg_logo = (channel.find('tvg-logo').text or '').strip() if channel.find('tvg-logo') is not None else ''
-        channel_number = (channel.find('channel-number').text or '').strip() if channel.find('channel-number') is not None else ''
+        channel_number = (channel.find('channel-number').text or '').strip() if channel.find('channel-number') is not None else str(idx)
         youtube_url = (channel.find('youtube-url').text or '').strip() if channel.find('youtube-url') is not None else ''
 
         if not tvg_id or not youtube_url:
@@ -100,9 +99,8 @@ def generate_epg_from_xml_file(xml_path, output_path):
         ch_elem.set('id', tvg_id)
         display_name = ET.SubElement(ch_elem, 'display-name')
         display_name.text = tvg_name or name
-        if channel_number:
-            chnum_name = ET.SubElement(ch_elem, 'display-name')
-            chnum_name.text = channel_number
+        chnum_name = ET.SubElement(ch_elem, 'display-name')
+        chnum_name.text = channel_number
         if tvg_logo:
             icon = ET.SubElement(ch_elem, 'icon')
             icon.set('src', tvg_logo)
