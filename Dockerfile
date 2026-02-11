@@ -19,6 +19,10 @@ ENV M3U_DIR=/data
 ENV HOST_IP=127.0.0.1
 ENV SERVER_PORT=6095
 
+# HDHomeRun emulation defaults
+ENV HDHR_FRIENDLY_NAME=youtube-to-m3u
+ENV HDHR_TUNER_COUNT=2
+
 EXPOSE ${SERVER_PORT}
 
 CMD ["python", "youtube-live.py"]

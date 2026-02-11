@@ -1,6 +1,11 @@
 import subprocess
 import json
 import logging
+import socket
+import struct
+import threading
+import time
+import uuid
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime, timedelta
@@ -22,6 +27,99 @@ M3U_DIR = os.environ.get('M3U_DIR', '/data')
 # Host IP/hostname used in .m3u files
 HOST_IP = os.environ.get('HOST_IP', '192.168.1.123')
 SERVER_PORT = os.environ.get('SERVER_PORT', '6095')
+
+# HDHomeRun emulation settings
+HDHR_DEVICE_ID = os.environ.get('HDHR_DEVICE_ID', None)
+HDHR_FRIENDLY_NAME = os.environ.get('HDHR_FRIENDLY_NAME', 'youtube-to-m3u')
+HDHR_TUNER_COUNT = int(os.environ.get('HDHR_TUNER_COUNT', '2'))
+HDHR_MANUFACTURER = os.environ.get('HDHR_MANUFACTURER', 'Silicondust')
+HDHR_MODEL = os.environ.get('HDHR_MODEL', 'HDTC-2US')
+HDHR_FIRMWARE = os.environ.get('HDHR_FIRMWARE', 'hdhomerun3_atsc')
+HDHR_FIRMWARE_VERSION = os.environ.get('HDHR_FIRMWARE_VERSION', '20200101')
+
+def _generate_device_id():
+    """Generate a stable 8-character hex device ID from the machine's MAC address."""
+    mac = uuid.getnode()
+    return format(mac & 0xFFFFFFFF, '08X')
+
+DEVICE_ID = HDHR_DEVICE_ID or _generate_device_id()
+
+# ─── SSDP Discovery ──────────────────────────────────────────────────────────
+
+SSDP_MULTICAST = '239.255.255.250'
+SSDP_PORT = 1900
+SSDP_DEVICE_TYPE = 'urn:schemas-upnp-org:device:MediaServer:1'
+
+
+def ssdp_response(addr, host_ip, port):
+    """Send an SSDP M-SEARCH response to the requesting address."""
+    response = (
+        f'HTTP/1.1 200 OK\r\n'
+        f'CACHE-CONTROL: max-age=1800\r\n'
+        f'EXT:\r\n'
+        f'LOCATION: http://{host_ip}:{port}/device.xml\r\n'
+        f'SERVER: youtube-to-m3u/1.0 UPnP/1.0 HDHomeRun/1.0\r\n'
+        f'ST: {SSDP_DEVICE_TYPE}\r\n'
+        f'USN: uuid:{DEVICE_ID}::{SSDP_DEVICE_TYPE}\r\n'
+        f'\r\n'
+    )
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.sendto(response.encode('utf-8'), addr)
+        sock.close()
+    except Exception as e:
+        logging.warning(f'SSDP response error: {e}')
+
+
+def ssdp_listener(host_ip, port):
+    """Listen for SSDP M-SEARCH requests and respond."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Bind to SSDP port on all interfaces
+        sock.bind(('', SSDP_PORT))
+        # Join the multicast group
+        mreq = struct.pack('4sL', socket.inet_aton(SSDP_MULTICAST), socket.INADDR_ANY)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        logging.info(f'SSDP listener started on {SSDP_MULTICAST}:{SSDP_PORT}')
+        while True:
+            data, addr = sock.recvfrom(1024)
+            if b'M-SEARCH' in data and SSDP_DEVICE_TYPE.encode('utf-8') in data:
+                logging.info(f'Received SSDP M-SEARCH from {addr}')
+                ssdp_response(addr, host_ip, port)
+    except Exception as e:
+        logging.error(f'SSDP listener error: {e}')
+
+
+def ssdp_broadcaster(host_ip, port):
+    """Periodically broadcast SSDP NOTIFY (alive) messages."""
+    notify = (
+        f'NOTIFY * HTTP/1.1\r\n'
+        f'HOST: {SSDP_MULTICAST}:{SSDP_PORT}\r\n'
+        f'CACHE-CONTROL: max-age=1800\r\n'
+        f'LOCATION: http://{host_ip}:{port}/device.xml\r\n'
+        f'SERVER: youtube-to-m3u/1.0 UPnP/1.0 HDHomeRun/1.0\r\n'
+        f'NT: {SSDP_DEVICE_TYPE}\r\n'
+        f'NTS: ssdp:alive\r\n'
+        f'USN: uuid:{DEVICE_ID}::{SSDP_DEVICE_TYPE}\r\n'
+        f'\r\n'
+    )
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        logging.info(f'SSDP broadcaster started for {host_ip}:{port}')
+        while True:
+            sock.sendto(notify.encode('utf-8'), (SSDP_MULTICAST, SSDP_PORT))
+            time.sleep(30)
+    except Exception as e:
+        logging.error(f'SSDP broadcaster error: {e}')
+
+
+def start_ssdp(host_ip, port):
+    """Start SSDP listener and broadcaster in background daemon threads."""
+    threading.Thread(target=ssdp_listener, args=(host_ip, port), daemon=True).start()
+    threading.Thread(target=ssdp_broadcaster, args=(host_ip, port), daemon=True).start()
+    logging.info(f'SSDP services started — device {DEVICE_ID} on {host_ip}:{port}')
 
 def generate_m3u_from_xml_file(xml_path, output_path):
     """Parse a youtubelinks.xml file and write a youtubelive.m3u playlist."""
@@ -218,6 +316,120 @@ def serve_epg(filename):
         content = f.read()
     return Response(content, content_type='application/xml')
 
+def get_channels_from_xml():
+    """Read channel list from youtubelinks.xml. Returns a list of dicts."""
+    xml_path = os.path.join(M3U_DIR, 'youtubelinks.xml')
+    if not os.path.isfile(xml_path):
+        return []
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+    except ET.ParseError:
+        return []
+
+    channels = []
+    for idx, ch in enumerate(root.findall('channel'), start=1):
+        name = (ch.find('channel-name').text or '').strip() if ch.find('channel-name') is not None else 'Unknown'
+        tvg_id = (ch.find('tvg-id').text or '').strip() if ch.find('tvg-id') is not None else ''
+        tvg_name = (ch.find('tvg-name').text or '').strip() if ch.find('tvg-name') is not None else name
+        tvg_logo = (ch.find('tvg-logo').text or '').strip() if ch.find('tvg-logo') is not None else ''
+        group_title = (ch.find('group-title').text or '').strip() if ch.find('group-title') is not None else 'General'
+        channel_number = (ch.find('channel-number').text or '').strip() if ch.find('channel-number') is not None else str(idx)
+        youtube_url = (ch.find('youtube-url').text or '').strip() if ch.find('youtube-url') is not None else ''
+        if youtube_url:
+            channels.append({
+                'name': name,
+                'tvg_id': tvg_id,
+                'tvg_name': tvg_name,
+                'tvg_logo': tvg_logo,
+                'group_title': group_title,
+                'channel_number': channel_number,
+                'youtube_url': youtube_url,
+            })
+    return channels
+
+
+# ─── HDHomeRun Emulation Endpoints ───────────────────────────────────────────
+
+@app.route('/discover.json', methods=['GET'])
+def hdhr_discover():
+    """HDHomeRun device discovery — used by Plex to detect the tuner."""
+    base_url = f'http://{HOST_IP}:{SERVER_PORT}'
+    data = {
+        'FriendlyName': HDHR_FRIENDLY_NAME,
+        'Manufacturer': HDHR_MANUFACTURER,
+        'ModelNumber': HDHR_MODEL,
+        'FirmwareName': HDHR_FIRMWARE,
+        'FirmwareVersion': HDHR_FIRMWARE_VERSION,
+        'DeviceID': DEVICE_ID,
+        'DeviceAuth': DEVICE_ID,
+        'BaseURL': base_url,
+        'LineupURL': f'{base_url}/lineup.json',
+        'TunerCount': HDHR_TUNER_COUNT,
+    }
+    return jsonify(data)
+
+
+@app.route('/lineup.json', methods=['GET'])
+def hdhr_lineup():
+    """HDHomeRun channel lineup — Plex reads this to populate its channel list."""
+    base_url = f'http://{HOST_IP}:{SERVER_PORT}'
+    channels = get_channels_from_xml()
+    lineup = []
+    for ch in channels:
+        entry = {
+            'GuideNumber': ch['channel_number'],
+            'GuideName': ch['name'],
+            'URL': f'{base_url}/stream?url={ch["youtube_url"]}',
+        }
+        if ch.get('tvg_logo'):
+            entry['Station'] = ch['channel_number']
+        lineup.append(entry)
+    return Response(json.dumps(lineup), content_type='application/json')
+
+
+@app.route('/lineup_status.json', methods=['GET'])
+def hdhr_lineup_status():
+    """HDHomeRun lineup scan status."""
+    data = {
+        'ScanInProgress': 0,
+        'ScanPossible': 0,
+        'Source': 'Cable',
+        'SourceList': ['Cable'],
+    }
+    return jsonify(data)
+
+
+@app.route('/device.xml', methods=['GET'])
+def hdhr_device_xml():
+    """HDHomeRun device descriptor XML — used by SSDP discovery."""
+    base_url = f'http://{HOST_IP}:{SERVER_PORT}'
+    xml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+    <specVersion>
+        <major>1</major>
+        <minor>0</minor>
+    </specVersion>
+    <URLBase>{base_url}</URLBase>
+    <device>
+        <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+        <friendlyName>{HDHR_FRIENDLY_NAME}</friendlyName>
+        <manufacturer>{HDHR_MANUFACTURER}</manufacturer>
+        <modelName>{HDHR_MODEL}</modelName>
+        <modelNumber>{HDHR_MODEL}</modelNumber>
+        <serialNumber></serialNumber>
+        <UDN>uuid:{DEVICE_ID}</UDN>
+    </device>
+</root>"""
+    return Response(xml_response.strip(), content_type='application/xml')
+
+
+@app.route('/lineup.post', methods=['POST', 'GET'])
+def hdhr_lineup_post():
+    """Handle lineup scan trigger (Plex may call this)."""
+    return Response('', status=200)
+
+
 @app.route('/stream', methods=['GET'])
 def stream():
     url = unquote(request.args.get('url'))  # Decode URL-encoded characters
@@ -324,5 +536,11 @@ if __name__ == '__main__':
     epg_path = os.path.join(M3U_DIR, 'youtubelinks_epg.xml')
     generate_m3u_from_xml_file(xml_path, m3u_path)
     generate_epg_from_xml_file(xml_path, epg_path)
+
+    # Start SSDP services for HDHomeRun auto-discovery on the local network
+    start_ssdp(HOST_IP, SERVER_PORT)
+
+    logging.info(f'HDHomeRun emulation active — Device ID: {DEVICE_ID}, Name: {HDHR_FRIENDLY_NAME}')
+    logging.info(f'Add to Plex via: http://{HOST_IP}:{SERVER_PORT}')
 
     app.run(host='0.0.0.0', port=int(SERVER_PORT))

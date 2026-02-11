@@ -1,10 +1,14 @@
 # youtube-to-m3u
 
-A containerized Flask server that proxies YouTube live streams, making them playable in any IPTV player via M3U playlists.
+A containerized Flask server that proxies YouTube live streams, making them playable in any IPTV player via M3U playlists. It also emulates an **HDHomeRun tuner** so it can be added directly to **Plex** as a DVR/Live TV source.
 
 ## How It Works
 
 The server uses [Streamlink](https://streamlink.github.io/) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) to resolve YouTube live stream URLs on the fly. Define your channels in a simple XML file, and the container automatically generates an M3U playlist and XMLTV EPG at startup.
+
+### HDHomeRun Emulation
+
+The server exposes the same HTTP endpoints as a real [HDHomeRun](https://www.silicondust.com/) network tuner (`/discover.json`, `/lineup.json`, `/lineup_status.json`, `/device.xml`). It also runs an **SSDP** service so Plex can automatically discover the virtual tuner on your local network. This means you can add it in Plex just like a physical antenna tuner — no plugins required.
 
 ## Important Note
 
@@ -33,58 +37,88 @@ The m3u/extracted m3u8 links will only work on machines that have the same publi
 
 3. Start the container:
 
-```bash
-docker compose up -d
-```
+   ```bash
+   docker compose up -d
+   ```
 
 4. The server will be available at `http://<HOST_IP>:6095`
 
 5. Access your m3u playlist at:
 
-```
-http://<HOST_IP>:6095/m3u/youtubelive.m3u
-```
+   ```
+   http://<HOST_IP>:6095/m3u/youtubelive.m3u
+   ```
 
 6. Access your EPG at:
 
-```
-http://<HOST_IP>:6095/epg/youtubelinks_epg.xml
-```
+   ```
+   http://<HOST_IP>:6095/epg/youtubelinks_epg.xml
+   ```
+
+## Adding to Plex as a DVR
+
+1. Make sure the container is running with `network_mode: host` (required for SSDP auto-discovery).
+
+2. In Plex, go to **Settings → Live TV & DVR → Set Up Plex DVR**.
+
+3. Plex should automatically discover the **youtube-to-m3u** device on your network. If it doesn't, click **"Don't see your HDHomeRun device?"** and enter the URL manually:
+
+   ```
+   http://<HOST_IP>:6095
+   ```
+
+4. Plex will load the channel lineup from `/lineup.json`. Continue through the setup.
+
+5. When asked for an EPG / guide data source, provide the XMLTV URL:
+
+   ```
+   http://<HOST_IP>:6095/epg/youtubelinks_epg.xml
+   ```
+
+6. Map the EPG channels to the detected tuner channels and finish setup.
+
+> **Note:** The `network_mode: host` setting in `docker-compose.yml` is required so that SSDP multicast packets (port 1900) reach the host network. Without it, Plex won't auto-discover the tuner. If you can't use host networking, you can manually enter the URL in Plex instead.
 
 ## Build and Run Manually
 
 ```bash
 docker build -t youtube-live .
-docker run -p 6095:6095 -v ./data:/data -e HOST_IP=192.168.1.123 -e SERVER_PORT=6095 youtube-live
+docker run --network host -v ./data:/data -e HOST_IP=192.168.1.123 -e SERVER_PORT=6095 youtube-live
 ```
 
 ## Docker Compose Configuration
 
-The `docker-compose.yml` mounts the local `./data` directory into the container at `/data`. Environment variables control the host IP, port, and data directory. At startup, if `youtubelinks.xml` is present in the data directory, the server automatically generates `youtubelive.m3u` and `youtubelinks_epg.xml` from it.
+The `docker-compose.yml` uses `network_mode: host` for SSDP auto-discovery and mounts the local `./data` directory into the container at `/data`. At startup, if `youtubelinks.xml` is present in the data directory, the server automatically generates `youtubelive.m3u` and `youtubelinks_epg.xml` from it.
 
 ```yaml
 services:
   youtube-live:
     build: .
     container_name: youtube-live
-    ports:
-      - "6095:6095"
+    network_mode: host
     volumes:
       - ./data:/data
     environment:
       - M3U_DIR=/data
       - HOST_IP=192.168.1.123
       - SERVER_PORT=6095
+      - HDHR_FRIENDLY_NAME=youtube-to-m3u
+      - HDHR_TUNER_COUNT=2
     restart: unless-stopped
 ```
 
 ## Environment Variables
 
-| Variable      | Description                                  | Default         |
-| ------------- | -------------------------------------------- | --------------- |
-| `HOST_IP`     | IP address used in generated m3u stream URLs | `192.168.1.123` |
-| `SERVER_PORT` | Port the Flask server listens on             | `6095`          |
-| `M3U_DIR`     | Directory for m3u/xml files inside container | `/data`         |
+| Variable             | Description                                  | Default          |
+| -------------------- | -------------------------------------------- | ---------------- |
+| `HOST_IP`            | IP address used in generated m3u stream URLs | `192.168.1.123`  |
+| `SERVER_PORT`        | Port the Flask server listens on             | `6095`           |
+| `M3U_DIR`            | Directory for m3u/xml files inside container | `/data`          |
+| `HDHR_DEVICE_ID`     | Custom HDHomeRun device ID (8-char hex)      | auto-generated   |
+| `HDHR_FRIENDLY_NAME` | Device name shown in Plex during discovery   | `youtube-to-m3u` |
+| `HDHR_TUNER_COUNT`   | Number of simultaneous tuners to advertise   | `2`              |
+| `HDHR_MANUFACTURER`  | Manufacturer string in device info           | `Silicondust`    |
+| `HDHR_MODEL`         | Model number in device info                  | `HDTC-2US`       |
 
 ## Channel Configuration via XML
 
@@ -125,6 +159,8 @@ http://<HOST_IP>:6095/epg
 
 ## Endpoints
 
+### Stream & Playlist Endpoints
+
 | Endpoint                    | Description                                                       |
 | --------------------------- | ----------------------------------------------------------------- |
 | `/stream?url=<youtube-url>` | Proxies a YouTube live stream via Streamlink                      |
@@ -135,3 +171,13 @@ http://<HOST_IP>:6095/epg
 | `/generate?xml=<filename>`  | Generates an m3u from a custom XML file                           |
 | `/epg`                      | Generates EPG from `youtubelinks.xml` and serves it               |
 | `/epg?xml=<filename>`       | Generates EPG from a custom XML file                              |
+
+### HDHomeRun Emulation Endpoints
+
+| Endpoint              | Description                                              |
+| --------------------- | -------------------------------------------------------- |
+| `/discover.json`      | Device discovery info (DeviceID, TunerCount, etc.)       |
+| `/lineup.json`        | Channel lineup with stream URLs (read by Plex)           |
+| `/lineup_status.json` | Lineup scan status                                       |
+| `/device.xml`         | UPnP device descriptor XML (used by SSDP auto-discovery) |
+| `/lineup.post`        | Handles lineup scan trigger from Plex                    |
