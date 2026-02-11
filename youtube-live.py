@@ -21,33 +21,18 @@ M3U_DIR = os.environ.get('M3U_DIR', '/data')
 HOST_IP = os.environ.get('HOST_IP', '192.168.1.123')
 SERVER_PORT = os.environ.get('SERVER_PORT', '6095')
 
-@app.route('/m3u/<path:filename>', methods=['GET'])
-def serve_m3u(filename):
-    """Serve .m3u files from the configured directory, replacing {{HOST_IP}} and {{PORT}} placeholders."""
-    if not filename.endswith('.m3u'):
-        return jsonify({'error': 'Only .m3u files can be served'}), 400
-    filepath = os.path.join(M3U_DIR, filename)
-    if not os.path.isfile(filepath):
-        return jsonify({'error': 'File not found'}), 404
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = f.read()
-    content = content.replace('{{HOST_IP}}', HOST_IP)
-    content = content.replace('{{PORT}}', SERVER_PORT)
-    return Response(content, content_type='audio/x-mpegurl')
-
-@app.route('/generate', methods=['GET'])
-def generate_m3u_from_xml():
-    """Generate an m3u playlist dynamically from a youtubelinks.xml file in the data directory."""
-    xml_filename = request.args.get('xml', 'youtubelinks.xml')
-    xml_path = os.path.join(M3U_DIR, xml_filename)
+def generate_m3u_from_xml_file(xml_path, output_path):
+    """Parse a youtubelinks.xml file and write a youtubelive.m3u playlist."""
     if not os.path.isfile(xml_path):
-        return jsonify({'error': f'XML file not found: {xml_filename}'}), 404
+        logging.warning(f"XML file not found at {xml_path}, skipping m3u generation.")
+        return False
 
     try:
         tree = ET.parse(xml_path)
         root = tree.getroot()
     except ET.ParseError as e:
-        return jsonify({'error': f'Failed to parse XML: {str(e)}'}), 400
+        logging.error(f"Failed to parse XML file {xml_path}: {str(e)}")
+        return False
 
     base_url = f'http://{HOST_IP}:{SERVER_PORT}'
     lines = ['#EXTM3U']
@@ -70,6 +55,41 @@ def generate_m3u_from_xml():
         lines.append(f'{base_url}/stream?url={youtube_url}')
 
     content = '\n'.join(lines) + '\n'
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    logging.info(f"Generated {output_path} from {xml_path} with {len(lines) - 1} entries.")
+    return True
+
+@app.route('/m3u/<path:filename>', methods=['GET'])
+def serve_m3u(filename):
+    """Serve .m3u files from the configured directory, replacing {{HOST_IP}} and {{PORT}} placeholders."""
+    if not filename.endswith('.m3u'):
+        return jsonify({'error': 'Only .m3u files can be served'}), 400
+    filepath = os.path.join(M3U_DIR, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({'error': 'File not found'}), 404
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    content = content.replace('{{HOST_IP}}', HOST_IP)
+    content = content.replace('{{PORT}}', SERVER_PORT)
+    return Response(content, content_type='audio/x-mpegurl')
+
+@app.route('/generate', methods=['GET'])
+def generate_m3u_from_xml():
+    """Generate an m3u playlist dynamically from a youtubelinks.xml file in the data directory."""
+    xml_filename = request.args.get('xml', 'youtubelinks.xml')
+    xml_path = os.path.join(M3U_DIR, xml_filename)
+    if not os.path.isfile(xml_path):
+        return jsonify({'error': f'XML file not found: {xml_filename}'}), 404
+
+    output_filename = os.path.splitext(xml_filename)[0] + '.m3u'
+    output_path = os.path.join(M3U_DIR, output_filename)
+
+    if not generate_m3u_from_xml_file(xml_path, output_path):
+        return jsonify({'error': 'Failed to generate m3u from XML'}), 500
+
+    with open(output_path, 'r', encoding='utf-8') as f:
+        content = f.read()
     return Response(content, content_type='audio/x-mpegurl')
 
 @app.route('/stream', methods=['GET'])
@@ -172,4 +192,9 @@ def stream():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    # Generate youtubelive.m3u from youtubelinks.xml at startup if the XML exists
+    xml_path = os.path.join(M3U_DIR, 'youtubelinks.xml')
+    m3u_path = os.path.join(M3U_DIR, 'youtubelive.m3u')
+    generate_m3u_from_xml_file(xml_path, m3u_path)
+
     app.run(host='0.0.0.0', port=int(SERVER_PORT))

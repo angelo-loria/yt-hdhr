@@ -1,5 +1,0 @@
-#EXTM3U
-#EXTINF:-1 tvg-name="DuluthHarborCam" tvg-id="DuluthHarborCam.us" tvg-logo="https://images.clubexpress.com/605134/graphics/Duluth_Harbor_Cam_1440771302.png" group-title="Live",Duluth Harbor Cam
-http://{{HOST_IP}}:{{PORT}}/stream?url=https://www.youtube.com/watch?v=HPS48TMmNag
-#EXTINF:-1 tvg-name="GB News" tvg-id="GB.News.HD.uk" tvg-logo="https://github.com/tv-logo/tv-logos/blob/main/countries/united-kingdom/gb-news-uk.png?raw=true" group-title="News",GB News
-http://{{HOST_IP}}:{{PORT}}/stream?url=https://www.youtube.com/@GBNewsOnline/live
