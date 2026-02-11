@@ -6,6 +6,8 @@ services:
       - "6095:6095"
     volumes:
       - ./data:/data
-    env_file:
-      - stack.env
+    environment:
+      - M3U_DIR=/data
+      - HOST_IP=127.0.0.1
+      - SERVER_PORT=6095
     restart: unless-stopped
