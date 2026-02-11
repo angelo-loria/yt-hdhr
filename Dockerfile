@@ -11,7 +11,7 @@ RUN apt-get update && \
 RUN pip install --no-cache-dir flask streamlink yt-dlp
 
 # Copy application code
-COPY youtube-live.py .
+COPY yt-hdhr.py .
 
 # Default directory for .m3u files
 RUN mkdir -p /data
@@ -25,4 +25,4 @@ ENV HDHR_TUNER_COUNT=2
 
 EXPOSE ${SERVER_PORT}
 
-CMD ["python", "youtube-live.py"]
+CMD ["python", "yt-hdhr.py"]
