@@ -39,15 +39,14 @@ The server exposes the same HTTP endpoints as a real HDHR network tuner (`/disco
    docker compose up -d
    ```
 
-4. The server will be available at `http://<HOST_IP>:6095`
-
-5. Access your m3u playlist at:
+4. The server will be available at `http://<HOST_IP>:6095`. HDHR clients should be able to discover it automatically.
+   - Access your m3u playlist at:
 
    ```
    http://<HOST_IP>:6095/m3u/ytlive.m3u
    ```
 
-6. Access your EPG at:
+   - Access your EPG at:
 
    ```
    http://<HOST_IP>:6095/epg/ytlinks_epg.xml
