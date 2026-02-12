@@ -97,8 +97,8 @@ Define your channels in `ytlinks.xml` and place it in the `data/` directory. The
 
 | Field            | Description                                                    | Required |
 | ---------------- | -------------------------------------------------------------- | -------- |
-| `channel-name`   | Display name of the channel                                    | No       |
-| `tvg-id`         | EPG tag matching your EPG source's tvg-id                      | No       |
+| `channel-name`   | Display name of the channel                                    | Yes      |
+| `tvg-id`         | EPG tag matching your EPG source's tvg-id                      | Yes      |
 | `tvg-name`       | Channel name used in the m3u tvg-name attribute                | No       |
 | `tvg-logo`       | Direct URL to the channel logo image                           | No       |
 | `group-title`    | Group the channel appears in (e.g., News, Sports)              | No       |
