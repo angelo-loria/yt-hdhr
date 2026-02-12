@@ -52,7 +52,8 @@ The server exposes the same HTTP endpoints as a real HDHR network tuner (`/disco
    http://<HOST_IP>:6095/epg/ytlinks_epg.xml
    ```
 
-5. Add your HDHR tuner to Plex under Manage -> Live TV & DVR -> Add Device.
+5. Add your HDHR tuner to Plex under Manage -> Live TV & DVR -> Add Device. <br>
+
    <img src="common/tuner.png" alt="tuner" width="200"/>
 
    <img src="common/epg.png" alt="epg" width="400"/>
